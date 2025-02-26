@@ -1,90 +1,89 @@
 import streamlit as st
 import pandas as pd
 import os
+import time
 from io import BytesIO
 
-# Configure the Streamlit app's appearance and layout
-st.set_page_config(page_title="Data Sweeper By Muhammad Shahroz", layout="wide")
+# Streamlit Page Config
+st.set_page_config(page_title="Muhammad Shahroz", layout="wide")
 
-# Display the main app title and introductory text using default styling
-st.title("Advanced Data Sweeper By Muhammad Shahroz")
-st.write("Welcome to the Advanced Data Sweeper App! 🧹📊")
-st.write("Transform your files between CSV and Excel formats with built-in data cleaning and visualization.")
+st.title("🚀 Simple Data Sweeper By Muhammad Shahroz")
+st.write("Upload a file, clean the data, visualize insights, and download it!")
 
-# File uploader widget that accepts CSV and Excel files
-uploaded_files = st.file_uploader("Upload your files (CSV or Excel):", type=["csv", "xlsx"], accept_multiple_files=True)
+# File Upload
+uploaded_file = st.file_uploader("Upload a file (CSV or Excel):", type=["csv", "xlsx"])
 
-# Processing logic for uploaded files (if any files are uploaded)
-if uploaded_files:
-    for file in uploaded_files:
-        # Extract file extension to determine file type
-        file_extension = os.path.splitext(file.name)[-1].lower()
-        
-        # Read file into DataFrame based on its extension
-        if file_extension == ".csv":
-            df = pd.read_csv(file)
-        elif file_extension == ".xlsx":
-            df = pd.read_excel(file) 
+if uploaded_file:
+    # File Extension Check
+    file_extension = os.path.splitext(uploaded_file.name)[-1].lower()
+
+    # Read File
+    if file_extension == ".csv":
+        df = pd.read_csv(uploaded_file)
+    elif file_extension == ".xlsx":
+        df = pd.read_excel(uploaded_file)
+    else:
+        st.error(f"Unsupported file type: {file_extension}")
+        st.stop()
+
+    # Session Storage
+    if "cleaned_df" not in st.session_state:
+        st.session_state.cleaned_df = df.copy()
+
+    # File Info
+    st.write(f"📄 **File Name:** {uploaded_file.name}")
+    st.write(f"📏 **File Size:** {uploaded_file.size / 1024:.2f} KB")
+
+    # Preview Data
+    st.dataframe(st.session_state.cleaned_df)
+
+    # Data Cleaning
+    st.subheader("🛠️ Data Cleaning Options")
+
+    # Remove Duplicates
+    if st.button("Remove Duplicates"):
+        before = len(st.session_state.cleaned_df)
+        st.session_state.cleaned_df.drop_duplicates(inplace=True, ignore_index=True)
+        after = len(st.session_state.cleaned_df)
+
+        if before == after:
+            st.warning("⚠️ No duplicates found!")
         else:
-            st.error(f"Unsupported file type: {file_extension}")
-            continue
-        
-        # Display file information
-        st.write(f"**📄 File Name:** {file.name}")
-        st.write(f"**📏 File Size:** {file.size / 1024:.2f} KB")
-        
-        # Preview the first 5 rows of the uploaded file
-        st.write("🔍 Preview of the Uploaded File:")
-        st.dataframe(df.head())
-        
-        # Section for data cleaning options
-        st.subheader("🛠️ Data Cleaning Options")
-        if st.checkbox(f"Clean Data for {file.name}"):
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button(f"Remove Duplicates from {file.name}"):
-                    df.drop_duplicates(inplace=True)
-                    st.write("Duplicates Removed!")
-            with col2:
-                if st.button(f"Fill Missing Values for {file.name}"):
-                    numeric_cols = df.select_dtypes(include=['number']).columns
-                    df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
-                    st.write("Missing values in numeric columns filled with column means!")
-        
-        # Section to choose specific columns to convert
-        st.subheader("🎯 Select Columns to Convert")
-        columns = st.multiselect(f"Choose Columns for {file.name}", df.columns, default=list(df.columns))
-        df = df[columns]
-        
-        # Visualization section for uploaded data
-        st.subheader("📊 Data Visualization")
-        if st.checkbox(f"Show Visualization for {file.name}"):
-            numeric_df = df.select_dtypes(include='number')
-            if numeric_df.empty:
-                st.info("No numeric columns available for visualization.")
-            else:
-                # Display bar chart with all available numeric columns
-                st.bar_chart(numeric_df)
-        
-        # Section to choose file conversion type (CSV or Excel)
-        st.subheader("🔄 Conversion Options")
-        conversion_type = st.radio(f"Convert {file.name} to:", ["CSV", "Excel"], key=file.name)
-        if st.button(f"Convert {file.name}"):
-            buffer = BytesIO()
-            if conversion_type == "CSV":
-                df.to_csv(buffer, index=False)
-                file_name = file.name.replace(file_extension, ".csv")
-                mime_type = "text/csv"
-            elif conversion_type == "Excel":
-                df.to_excel(buffer, index=False, engine='openpyxl')
-                file_name = file.name.replace(file_extension, ".xlsx")
-                mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            buffer.seek(0)
-            st.download_button(
-                label=f"⬇️ Download {file.name} as {conversion_type}",
-                data=buffer,
-                file_name=file_name,
-                mime=mime_type
-            )
+            st.success(f"✔️ Removed {before - after} duplicate rows!")
+            time.sleep(2)
+            st.rerun()
 
-st.success("🎉 All files processed successfully!")
+    # Column Selection
+    selected_columns = st.multiselect("🎯 Select Columns", st.session_state.cleaned_df.columns, default=list(st.session_state.cleaned_df.columns))
+    st.session_state.cleaned_df = st.session_state.cleaned_df[selected_columns]
+
+    # Data Visualization
+    st.subheader("📊 Data Visualization")
+    if st.checkbox("Show Visualization"):
+        numeric_df = st.session_state.cleaned_df.select_dtypes(include=['number'])
+
+        if numeric_df.empty:
+            st.info("No numeric columns available for visualization.")
+        else:
+            st.bar_chart(numeric_df)  # Simple Streamlit chart
+
+    # File Conversion & Download
+    st.subheader("🔄 Download File")
+    conversion_type = st.radio("Convert file to:", ["CSV", "Excel"])
+
+    if st.button("Download File"):
+        buffer = BytesIO()
+        if conversion_type == "CSV":
+            st.session_state.cleaned_df.to_csv(buffer, index=False)
+            file_ext = ".csv"
+            mime_type = "text/csv"
+        else:
+            st.session_state.cleaned_df.to_excel(buffer, index=False, engine='openpyxl')
+            file_ext = ".xlsx"
+            mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+        buffer.seek(0)
+        st.download_button(label=f"⬇️ Download {uploaded_file.name.replace(file_extension, file_ext)}", data=buffer, file_name=uploaded_file.name.replace(file_extension, file_ext), mime=mime_type)
+
+else:
+    st.info("📢 Upload a file to get started!")
